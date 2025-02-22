@@ -17,9 +17,9 @@ ANDROID_DOWNLOADS = '/storage/emulated/0/Download'
 UPLOAD_FOLDER = os.path.join(ANDROID_DOWNLOADS, 'FileStorageAPI')
 
 # Allowed file extensions
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'csv'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'mp4', 'mp3'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 5000 * 1024 * 1024  # 5GB max file size
+app.config['MAX_CONTENT_LENGTH'] = 3000 * 1024 * 1024  # 3GB max file size
 
 # Create uploads directory if it doesn't exist
 try:
