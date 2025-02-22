@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Storage Service</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        form {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            margin-top: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            transition: width 0.3s;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        .file-item:hover {
+            background-color: #f5f5f5;
+        }
+        .file-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .download-btn {
+            background-color: #2196F3;
+        }
+        .download-btn:hover {
+            background-color: #0b7dda;
+        }
+        .delete-btn {
+            background-color: #f44336;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+        .status {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .api-url {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        .connection-status {
+            font-weight: bold;
+        }
+        .connected {
+            color: green;
+        }
+        .disconnected {
+            color: red;
+        }
+        #refresh-btn {
+            margin-right: 10px;
+        }
+        #file-input {
+            padding: 10px 0;
+        }
+        .file-size {
+            color: #666;
+            font-size: 0.9em;
+        }
+        @media (max-width: 600px) {
+            .file-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .file-actions {
+                margin-top: 10px;
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>File Storage Service</h1>
+    
+    <div class="api-url">
+        API URL: <span id="api-url-display">Detecting...</span>
+        <div>Status: <span id="connection-status" class="connection-status">Checking connection...</span></div>
+    </div>
+    
+    <form id="upload-form">
+        <h2>Upload a File</h2>
+        <input type="file" id="file-input" required>
+        <button type="submit">Upload</button>
+        <div class="progress-container" id="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div id="upload-status"></div>
+    </form>
+    
+    <h2>Your Files</h2>
+    <div>
+        <button id="refresh-btn">Refresh File List</button>
+        <span id="file-count"></span>
+    </div>
+    <div id="file-list">Loading...</div>
+    
+    <script>
+        // Get API URL from the page location
+        const API_URL = window.location.origin;
+        
+        // DOM elements
+        const uploadForm = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-input');
+        const uploadStatus = document.getElementById('upload-status');
+        const fileList = document.getElementById('file-list');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const apiUrlDisplay = document.getElementById('api-url-display');
+        const connectionStatus = document.getElementById('connection-status');
+        const fileCount = document.getElementById('file-count');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        
+        // Display the API URL being used
+        apiUrlDisplay.textContent = API_URL;
+        
+        // Check connection to API
+        async function checkConnection() {
+            try {
+                const response = await fetch(`${API_URL}/`);
+                if (response.ok) {
+                    connectionStatus.textContent = 'Connected';
+                    connectionStatus.classList.add('connected');
+                    connectionStatus.classList.remove('disconnected');
+                } else {
+                    connectionStatus.textContent = 'Error connecting to API';
+                    connectionStatus.classList.add('disconnected');
+                    connectionStatus.classList.remove('connected');
+                }
+            } catch (error) {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.classList.add('disconnected');
+                connectionStatus.classList.remove('connected');
+                console.error('Connection error:', error);
+            }
+        }
+        
+        // Handle file upload with progress indicator
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!fileInput.files[0]) {
+                showUploadStatus('Please select a file', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            // Reset and show progress bar
+            progressBar.style.width = '0%';
+            progressContainer.style.display = 'block';
+            showUploadStatus('Uploading...', '');
+            
+            try {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        progressBar.style.width = percentComplete + '%';
+                    }
+                });
+                
+                xhr.onload = function() {
+                    if (xhr.status === 201) {
+                        const result = JSON.parse(xhr.responseText);
+                        showUploadStatus('File uploaded successfully!', 'success');
+                        fileInput.value = '';
+                        loadFiles();
+                    } else if (xhr.status === 401) {
+                        showUploadStatus('Authentication required', 'error');
+                    } else {
+                        try {
+                            const result = JSON.parse(xhr.responseText);
+                            showUploadStatus(`Error: ${result.message}`, 'error');
+                        } catch (e) {
+                            showUploadStatus(`Error: Status ${xhr.status}`, 'error');
+                        }
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    showUploadStatus('Connection error. Check if API is running.', 'error');
+                };
+                
+                xhr.open('POST', `${API_URL}/api/files`);
+                xhr.withCredentials = true;
+                xhr.send(formData);
+                
+            } catch (error) {
+                showUploadStatus(`Error: ${error.message}`, 'error');
+            }
+        });
+        
+        // Show upload status with appropriate styling
+        function showUploadStatus(message, type) {
+            uploadStatus.textContent = message;
+            uploadStatus.className = 'status';
+            if (type) {
+                uploadStatus.classList.add(type);
+            }
+        }
+        
+        // Load file list
+        async function loadFiles() {
+            try {
+                const response = await fetch(`${API_URL}/api/files`, {
+                    credentials: 'include'
+                });
+                
+                if (response.status === 401) {
+                    fileList.innerHTML = '<p>Authentication required</p>';
+                    fileCount.textContent = '';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.files.length === 0) {
+                        fileList.innerHTML = '<p>No files uploaded yet.</p>';
+                        fileCount.textContent = '(0 files)';
+                    } else {
+                        fileCount.textContent = `(${data.files.length} file${data.files.length > 1 ? 's' : ''})`;
+                        
+                        // Sort files alphabetically
+                        data.files.sort((a, b) => a.filename.localeCompare(b.filename));
+                        
+                        fileList.innerHTML = data.files.map(file => `
+                            <div class="file-item">
+                                <div class="file-info">
+                                    <strong>${file.filename}</strong>
+                                    <span class="file-size">${formatFileSize(file.size)}</span>
+                                </div>
+                                <div class="file-actions">
+                                    <button class="download-btn" onclick="downloadFile('${file.filename}')">Download</button>
+                                    <button class="delete-btn" onclick="deleteFile('${file.filename}')">Delete</button>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    fileList.innerHTML = '<p>Error loading files</p>';
+                    fileCount.textContent = '';
+                }
+            } catch (error) {
+                fileList.innerHTML = `<p>Error: ${error.message}</p>`;
+                fileCount.textContent = '';
+                console.error('Error loading files:', error);
+            }
+        }
+        
+        // Download a file
+        function downloadFile(filename) {
+            window.open(`${API_URL}/api/files/${filename}`, '_blank');
+        }
+        
+        // Delete a file
+        async function deleteFile(filename) {
+            if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/files/${filename}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                if (response.status === 401) {
+                    alert('Authentication required');
+                    return;
+                }
+                
+                if (response.ok) {
+                    loadFiles();
+                } else {
+                    const data = await response.json();
+                    alert(`Error: ${data.message}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                console.error('Error deleting file:', error);
+            }
+        }
+        
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        
+        // Refresh file list button
+        refreshBtn.addEventListener('click', loadFiles);
+        
+        // Initial load
+        checkConnection();
+        loadFiles();
+        
+        // Make functions available globally
+        window.downloadFile = downloadFile;
+        window.deleteFile = deleteFile;
+    </script>
+</body>
+</html>
